@@ -1,2 +1,1 @@
-# hrw
-Golang simple HRW implementation
+# Golang simple HRW implementation
