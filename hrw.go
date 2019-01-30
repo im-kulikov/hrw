@@ -22,14 +22,14 @@ type (
 	}
 )
 
-const m64 = 18446744073709551615 // modulus (2**64-1)
-
 func weight(x uint64, y uint64) uint64 {
 	acc := x ^ y
+	// here used mmh3 64 bit finalizer
+	// https://github.com/aappleby/smhasher/blob/61a0530f28277f2e850bfc39600ce61d02b518de/src/MurmurHash3.cpp#L81
 	acc ^= acc >> 33
-	acc = (acc * 0xff51afd7ed558ccd) % m64
+	acc = acc * 0xff51afd7ed558ccd
 	acc ^= acc >> 33
-	acc = (acc * 0xc4ceb9fe1a85ec53) % m64
+	acc = acc * 0xc4ceb9fe1a85ec53
 	acc ^= acc >> 33
 	return acc
 }
