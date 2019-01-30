@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash/fnv"
+	"math"
 	"reflect"
 	"strconv"
 	"testing"
@@ -54,14 +55,14 @@ func (h hashString) Hash() uint64 {
 	hs := fnv.New64()
 	// error always nil
 	_, _ = hs.Write([]byte(h))
-	return (hs.Sum64() >> 1) % m64
+	return hs.Sum64() >> 1
 }
 
 func hash(key []byte) uint64 {
 	h := fnv.New64()
 	// error always nil
 	_, _ = h.Write(key)
-	return (h.Sum64() >> 1) ^ m64
+	return (h.Sum64() >> 1) ^ math.MaxUint64
 }
 
 func mur3hash(key []byte) uint64 {
@@ -184,7 +185,7 @@ func TestSortByWeight(t *testing.T) {
 func TestUniformDistribution(t *testing.T) {
 	var (
 		i      uint64
-		size   = uint64(4)
+		size   = uint64(10)
 		nodes  = make([]uint64, 0, size)
 		counts = make(map[uint64]uint64)
 		key    = make([]byte, 16)
@@ -202,7 +203,7 @@ func TestUniformDistribution(t *testing.T) {
 	}
 
 	mean := float64(keys) / float64(len(nodes))
-	delta := mean * 0.002 // 0.2%
+	delta := mean * 0.01 // 1 %
 	for node, count := range counts {
 		d := mean - float64(count)
 		if d > delta || (0-d) > delta {
