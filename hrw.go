@@ -3,11 +3,13 @@
 package hrw
 
 import (
+	"encoding/binary"
 	"errors"
-	"hash/fnv"
 	"reflect"
 	"sort"
 	"strconv"
+
+	"github.com/reusee/mmh3"
 )
 
 type (
@@ -37,6 +39,16 @@ func weight(x uint64, y uint64) uint64 {
 func (h hashed) Len() int           { return h.length }
 func (h hashed) Less(i, j int) bool { return h.weight[h.sorted[i]] < h.weight[h.sorted[j]] }
 func (h hashed) Swap(i, j int)      { h.sorted[i], h.sorted[j] = h.sorted[j], h.sorted[i] }
+
+func Hash(key []byte) uint64 {
+	h := mmh3.New128()
+	// error always nil
+	_, _ = h.Write(key)
+	data := h.Sum(nil)
+	return weight(
+		binary.BigEndian.Uint64(data[:8]),
+		binary.BigEndian.Uint64(data[8:]))
+}
 
 func SortByWeight(nodes []uint64, hash uint64) []uint64 {
 	var (
@@ -76,20 +88,16 @@ func SortSliceByValue(slice interface{}, hash uint64) error {
 
 	switch slice := slice.(type) {
 	case []int:
-		hasher := fnv.New64()
 		for i := 0; i < length; i++ {
-			hasher.Reset()
-			// error always nil
-			_, _ = hasher.Write([]byte(strconv.Itoa(slice[i])))
-			rule = append(rule, weight(hash, hasher.Sum64()))
+			key := strconv.Itoa(slice[i])
+			h := []byte(key)
+			// panic(Hash(h))
+			rule = append(rule, weight(hash, Hash(h)))
 		}
 	case []string:
-		hasher := fnv.New64()
 		for i := 0; i < length; i++ {
-			hasher.Reset()
-			// error always nil
-			_, _ = hasher.Write([]byte(slice[i]))
-			rule = append(rule, weight(hash, hasher.Sum64()))
+			rule = append(rule, weight(hash,
+				Hash([]byte(slice[i]))))
 		}
 	default:
 		if _, ok := val.Index(0).Interface().(Hasher); !ok {

@@ -3,18 +3,14 @@ package hrw
 import (
 	"encoding/binary"
 	"fmt"
-	"hash/fnv"
-	"math"
 	"reflect"
 	"strconv"
 	"testing"
-
-	"github.com/reusee/mmh3"
 )
 
 type hashString string
 
-var testKey = []byte("Golang simple HRW implementation")
+var testKey = []byte("0xff51afd7ed558ccd")
 
 func Example() {
 	// given a set of servers
@@ -31,7 +27,7 @@ func Example() {
 	// any given key
 	var (
 		key = []byte("/examples/object-key")
-		h   = hash(key)
+		h   = Hash(key)
 		err = SortSliceByValue(servers, h)
 	)
 
@@ -44,50 +40,22 @@ func Example() {
 	}
 
 	// Output:
-	// trying GET six.example.com/examples/object-key
+	// trying GET four.example.com/examples/object-key
 	// trying GET one.example.com/examples/object-key
 	// trying GET three.example.com/examples/object-key
-	// trying GET four.example.com/examples/object-key
-	// trying GET five.example.com/examples/object-key
 	// trying GET two.example.com/examples/object-key
+	// trying GET five.example.com/examples/object-key
+	// trying GET six.example.com/examples/object-key
 }
 func (h hashString) Hash() uint64 {
-	hs := fnv.New64()
-	// error always nil
-	_, _ = hs.Write([]byte(h))
-	return hs.Sum64() >> 1
-}
-
-func hash(key []byte) uint64 {
-	h := fnv.New64()
-	// error always nil
-	_, _ = h.Write(key)
-	return (h.Sum64() >> 1) ^ math.MaxUint64
-}
-
-func mur3hash(key []byte) uint64 {
-	h := mmh3.New128()
-	// error always nil
-	_, _ = h.Write(key)
-
-	var (
-		data   = h.Sum(nil)
-		length = len(data)
-		result uint64
-	)
-
-	for i := 0; i < length; i++ {
-		result += uint64(data[i]) << uint64(length-i)
-	}
-
-	return result
+	return Hash([]byte(h))
 }
 
 func TestSortSliceByIndex(t *testing.T) {
 	actual := []string{"a", "b", "c", "d", "e", "f"}
-	expect := []string{"e", "a", "c", "d", "b", "f"}
+	expect := []string{"c", "a", "f", "d", "b", "e"}
 
-	hash := hash(testKey)
+	hash := Hash(testKey)
 
 	SortSliceByIndex(actual, hash)
 	if !reflect.DeepEqual(actual, expect) {
@@ -97,9 +65,9 @@ func TestSortSliceByIndex(t *testing.T) {
 
 func TestSortSliceByValue(t *testing.T) {
 	actual := []string{"a", "b", "c", "d", "e", "f"}
-	expect := []string{"e", "b", "c", "d", "f", "a"}
+	expect := []string{"e", "a", "c", "d", "b", "f"}
 
-	hash := hash(testKey)
+	hash := Hash(testKey)
 
 	if err := SortSliceByValue(actual, hash); err != nil {
 		t.Fatal(err)
@@ -113,7 +81,7 @@ func TestSortSliceByValue(t *testing.T) {
 func TestSortSliceByValueFail(t *testing.T) {
 	t.Run("empty slice", func(t *testing.T) {
 		actual := make([]int, 0)
-		hash := hash(testKey)
+		hash := Hash(testKey)
 
 		if err := SortSliceByValue(actual, hash); err != nil {
 			t.Fatal(err)
@@ -123,7 +91,7 @@ func TestSortSliceByValueFail(t *testing.T) {
 
 	t.Run("must be slice", func(t *testing.T) {
 		actual := 10
-		hash := hash(testKey)
+		hash := Hash(testKey)
 
 		if err := SortSliceByValue(actual, hash); err == nil {
 			t.Fatal("must fail for bad type")
@@ -133,7 +101,7 @@ func TestSortSliceByValueFail(t *testing.T) {
 
 	t.Run("must fail for unknown type", func(t *testing.T) {
 		actual := []byte{1, 2, 3, 4, 5}
-		hash := hash(testKey)
+		hash := Hash(testKey)
 
 		if err := SortSliceByValue(actual, hash); err == nil {
 			t.Fatal("must fail for bad type")
@@ -143,9 +111,9 @@ func TestSortSliceByValueFail(t *testing.T) {
 
 func TestSortSliceByValueHasher(t *testing.T) {
 	actual := []hashString{"a", "b", "c", "d", "e", "f"}
-	expect := []hashString{"e", "d", "c", "a", "b", "f"}
+	expect := []hashString{"e", "a", "c", "d", "b", "f"}
 
-	hash := hash(testKey)
+	hash := Hash(testKey)
 
 	if err := SortSliceByValue(actual, hash); err != nil {
 		t.Fatal(err)
@@ -158,9 +126,9 @@ func TestSortSliceByValueHasher(t *testing.T) {
 
 func TestSortSliceByValueIntSlice(t *testing.T) {
 	actual := []int{0, 1, 2, 3, 4, 5}
-	expect := []int{2, 0, 5, 3, 4, 1}
+	expect := []int{3, 1, 0, 2, 4, 5}
 
-	hash := hash(testKey)
+	hash := Hash(testKey)
 
 	if err := SortSliceByValue(actual, hash); err != nil {
 		t.Fatal(err)
@@ -173,90 +141,187 @@ func TestSortSliceByValueIntSlice(t *testing.T) {
 
 func TestSortByWeight(t *testing.T) {
 	nodes := []uint64{1, 2, 3, 4, 5}
-	hash := mur3hash(testKey)
+	hash := Hash(testKey)
 
 	actual := SortByWeight(nodes, hash)
-	expected := []uint64{0, 1, 4, 2, 3}
+	expected := []uint64{0, 3, 2, 4, 1}
 	if !reflect.DeepEqual(actual, expected) {
 		t.Errorf("Was %#v, but expected %#v", actual, expected)
 	}
 }
 
 func TestUniformDistribution(t *testing.T) {
-	var (
-		i      uint64
-		size   = uint64(10)
-		nodes  = make([]uint64, 0, size)
-		counts = make(map[uint64]uint64)
-		key    = make([]byte, 16)
-		keys   = uint64(10000000)
-	)
+	t.Run("sortByWeight", func(t *testing.T) {
+		var (
+			i      uint64
+			size   = uint64(10)
+			nodes  = make([]uint64, 0, size)
+			counts = make(map[uint64]uint64)
+			key    = make([]byte, 16)
+			keys   = uint64(10000000)
+		)
 
-	for i = 0; i < size; i++ {
-		nodes = append(nodes, i)
-	}
-
-	for i = 0; i < keys; i++ {
-		binary.BigEndian.PutUint64(key, i)
-		hash := hash(key)
-		counts[SortByWeight(nodes, hash)[0]]++
-	}
-
-	mean := float64(keys) / float64(len(nodes))
-	delta := mean * 0.01 // 1 %
-	for node, count := range counts {
-		d := mean - float64(count)
-		if d > delta || (0-d) > delta {
-			t.Errorf(
-				"Node %d received %d keys, expected %v (+/- %v)",
-				node, count, mean, delta,
-			)
+		for i = 0; i < size; i++ {
+			nodes = append(nodes, i)
 		}
-	}
+
+		for i = 0; i < keys; i++ {
+			binary.BigEndian.PutUint64(key, i)
+			hash := Hash(key)
+			counts[SortByWeight(nodes, hash)[0]]++
+		}
+
+		mean := float64(keys) / float64(size)
+		delta := mean * 0.01 // 1 %
+		for node, count := range counts {
+			d := mean - float64(count)
+			if d > delta || (0-d) > delta {
+				t.Errorf(
+					"Node %d received %d keys, expected %v (+/- %v)",
+					node, count, mean, delta,
+				)
+			}
+		}
+	})
+
+	t.Run("sortByIndex", func(t *testing.T) {
+		var (
+			i      uint64
+			size   = uint64(10)
+			tmp    = make([]int, size)
+			nodes  = make([]int, 0, size)
+			counts = make(map[int]int)
+			key    = make([]byte, 16)
+			keys   = uint64(10000000)
+		)
+
+		for i = 0; i < size; i++ {
+			nodes = append(nodes, int(i+1))
+		}
+
+		for i = 0; i < keys; i++ {
+			copy(tmp, nodes)
+			binary.BigEndian.PutUint64(key, i)
+			hash := Hash(key)
+			// t.Logf("hash = %d", hash)
+			SortSliceByIndex(tmp, hash)
+			counts[tmp[0]]++
+		}
+
+		mean := float64(keys) / float64(size)
+		delta := mean * 0.01 // 1 %
+		for node, count := range counts {
+			d := mean - float64(count)
+			if d > delta || (0-d) > delta {
+				t.Errorf(
+					"Node %d received %d keys, expected %v (+/- %v)",
+					node, count, mean, delta,
+				)
+			}
+		}
+	})
+
+	t.Run("sortByValue", func(t *testing.T) {
+		var (
+			i      uint64
+			size   = uint64(10)
+			tmp    = make([]int, size)
+			nodes  = make([]int, 0, size)
+			counts = make(map[int]int)
+			key    = make([]byte, 16)
+			keys   = uint64(10000000)
+		)
+
+		for i = 0; i < size; i++ {
+			nodes = append(nodes, int(i+1))
+		}
+
+		for i = 0; i < keys; i++ {
+			copy(tmp, nodes)
+			binary.BigEndian.PutUint64(key, i)
+			hash := Hash(key)
+			// t.Logf("hash = %d", hash)
+			_ = SortSliceByValue(tmp, hash)
+			counts[tmp[0]]++
+		}
+
+		mean := float64(keys) / float64(size)
+		delta := mean * 0.01 // 1 %
+		for node, count := range counts {
+			d := mean - float64(count)
+			if d > delta || (0-d) > delta {
+				t.Errorf(
+					"Node %d received %d keys, expected %v (+/- %v)",
+					node, count, mean, delta,
+				)
+			}
+		}
+	})
+
+	t.Run("hash collision", func(t *testing.T) {
+		var (
+			i      uint64
+			counts = make(map[uint64]uint64)
+			key    = make([]byte, 16)
+			keys   = uint64(10000000)
+		)
+
+		for i = 0; i < keys; i++ {
+			binary.BigEndian.PutUint64(key, i)
+			hash := Hash(key)
+			counts[hash]++
+		}
+
+		for node, count := range counts {
+			if count > 1 {
+				t.Errorf("Node %d received %d keys", node, count)
+			}
+		}
+	})
 }
 
 func BenchmarkSortByWeight_fnv_10(b *testing.B) {
-	hash := hash(testKey)
+	hash := Hash(testKey)
 	_ = benchmarkSortByWeight(b, 10, hash)
 }
 
 func BenchmarkSortByWeight_fnv_100(b *testing.B) {
-	hash := hash(testKey)
+	hash := Hash(testKey)
 	_ = benchmarkSortByWeight(b, 100, hash)
 }
 
 func BenchmarkSortByWeight_fnv_1000(b *testing.B) {
-	hash := hash(testKey)
+	hash := Hash(testKey)
 	_ = benchmarkSortByWeight(b, 1000, hash)
 }
 
 func BenchmarkSortByIndex_fnv_10(b *testing.B) {
-	hash := hash(testKey)
+	hash := Hash(testKey)
 	benchmarkSortByIndex(b, 10, hash)
 }
 
 func BenchmarkSortByIndex_fnv_100(b *testing.B) {
-	hash := hash(testKey)
+	hash := Hash(testKey)
 	benchmarkSortByIndex(b, 100, hash)
 }
 
 func BenchmarkSortByIndex_fnv_1000(b *testing.B) {
-	hash := hash(testKey)
+	hash := Hash(testKey)
 	benchmarkSortByIndex(b, 1000, hash)
 }
 
 func BenchmarkSortByValue_fnv_10(b *testing.B) {
-	hash := hash(testKey)
+	hash := Hash(testKey)
 	benchmarkSortByValue(b, 10, hash)
 }
 
 func BenchmarkSortByValue_fnv_100(b *testing.B) {
-	hash := hash(testKey)
+	hash := Hash(testKey)
 	benchmarkSortByValue(b, 100, hash)
 }
 
 func BenchmarkSortByValue_fnv_1000(b *testing.B) {
-	hash := hash(testKey)
+	hash := Hash(testKey)
 	benchmarkSortByValue(b, 1000, hash)
 }
 
