@@ -5,6 +5,7 @@ env:
   - GO111MODULE=on
 install:
   - go get -v golang.org/x/lint/golint
+  - go mod tidy -v
 script:
   - golint -set_exit_status ./...
   - go test -race -coverprofile=coverage.txt -covermode=atomic ./...

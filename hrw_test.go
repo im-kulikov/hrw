@@ -159,8 +159,9 @@ func TestSortByWeight(t *testing.T) {
 
 func TestUniformDistribution(t *testing.T) {
 	const (
-		size = 10
-		keys = 10000000
+		size    = 10
+		keys    = 100000
+		percent = 0.03
 	)
 
 	t.Run("sortByWeight", func(t *testing.T) {
@@ -182,7 +183,7 @@ func TestUniformDistribution(t *testing.T) {
 		}
 
 		mean := float64(keys) / float64(size)
-		delta := mean * 0.01 // 1 %
+		delta := mean * percent
 		for node, count := range counts {
 			d := mean - float64(count)
 			if d > delta || (0-d) > delta {
@@ -216,7 +217,7 @@ func TestUniformDistribution(t *testing.T) {
 		}
 
 		mean := float64(keys) / float64(size)
-		delta := mean * 0.01 // 1 %
+		delta := mean * percent
 		for node, count := range counts {
 			d := mean - float64(count)
 			if d > delta || (0-d) > delta {
@@ -249,7 +250,7 @@ func TestUniformDistribution(t *testing.T) {
 		}
 
 		mean := float64(keys) / float64(size)
-		delta := mean * 0.01 // 1 %
+		delta := mean * percent
 		for node, count := range counts {
 			d := mean - float64(count)
 			if d > delta || (0-d) > delta {
@@ -266,7 +267,6 @@ func TestUniformDistribution(t *testing.T) {
 			i      uint64
 			counts = make(map[uint64]uint64)
 			key    = make([]byte, 16)
-			keys   = uint64(10000000)
 		)
 
 		for i = 0; i < keys; i++ {
