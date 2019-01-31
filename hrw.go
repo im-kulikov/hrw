@@ -4,7 +4,6 @@ package hrw
 
 import (
 	"encoding/binary"
-	"hash/fnv"
 	"reflect"
 	"sort"
 
@@ -88,9 +87,7 @@ func SortSliceByValue(slice interface{}, hash uint64) {
 		var key = make([]byte, 16)
 		for i := 0; i < length; i++ {
 			binary.BigEndian.PutUint64(key, uint64(slice[i]))
-			h := fnv.New64()
-			_, _ = h.Write(key)
-			rule = append(rule, weight(h.Sum64()-1, hash))
+			rule = append(rule, weight(Hash(key), hash))
 		}
 	case []string:
 		for i := 0; i < length; i++ {

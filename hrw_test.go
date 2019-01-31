@@ -3,6 +3,7 @@ package hrw
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"reflect"
 	"strconv"
 	"testing"
@@ -139,7 +140,7 @@ func TestSortSliceByValueHasher(t *testing.T) {
 
 func TestSortSliceByValueIntSlice(t *testing.T) {
 	actual := []int{0, 1, 2, 3, 4, 5}
-	expect := []int{1, 5, 3, 0, 4, 2}
+	expect := []int{2, 3, 1, 4, 0, 5}
 	hash := Hash(testKey)
 	SortSliceByValue(actual, hash)
 	if !reflect.DeepEqual(actual, expect) {
@@ -163,6 +164,10 @@ func TestUniformDistribution(t *testing.T) {
 		keys    = 100000
 		percent = 0.03
 	)
+	// We use χ2 method to determine similarity of distribution with uniform distribution.
+	// χ2 = Σ((n-N)**2/N)
+	// https://www.medcalc.org/manual/chi-square-table.php p=0.1
+	var chiTable = map[int]float64{9: 14.68, 99: 117.407}
 
 	t.Run("sortByWeight", func(t *testing.T) {
 		var (
@@ -182,16 +187,23 @@ func TestUniformDistribution(t *testing.T) {
 			counts[SortByWeight(nodes[:], hash)[0]]++
 		}
 
+		var chi2 float64
 		mean := float64(keys) / float64(size)
 		delta := mean * percent
 		for node, count := range counts {
 			d := mean - float64(count)
+			chi2 += math.Pow(float64(count)-mean, 2) / mean
 			if d > delta || (0-d) > delta {
 				t.Errorf(
-					"Node %d received %d keys, expected %v (+/- %v)",
+					"Node %d received %d keys, expected %.0f (+/- %.2f)",
 					node, count, mean, delta,
 				)
 			}
+		}
+		if chi2 > chiTable[size-1] {
+			t.Errorf(
+				"Chi2 condition for .9 is not met (expected %.2f <= %.2f)",
+				chi2, chiTable[size-1])
 		}
 	})
 
@@ -216,16 +228,23 @@ func TestUniformDistribution(t *testing.T) {
 			counts[b[0]]++
 		}
 
+		var chi2 float64
 		mean := float64(keys) / float64(size)
 		delta := mean * percent
 		for node, count := range counts {
 			d := mean - float64(count)
+			chi2 += math.Pow(float64(count)-mean, 2) / mean
 			if d > delta || (0-d) > delta {
 				t.Errorf(
 					"Node %d received %d keys, expected %.0f (+/- %.2f)",
 					node, count, mean, delta,
 				)
 			}
+		}
+		if chi2 > chiTable[size-1] {
+			t.Errorf(
+				"Chi2 condition for .9 is not met (expected %.2f <= %.2f)",
+				chi2, chiTable[size-1])
 		}
 	})
 
@@ -249,10 +268,12 @@ func TestUniformDistribution(t *testing.T) {
 			counts[b[0]]++
 		}
 
+		var chi2 float64
 		mean := float64(keys) / float64(size)
 		delta := mean * percent
 		for node, count := range counts {
 			d := mean - float64(count)
+			chi2 += math.Pow(float64(count)-mean, 2) / mean
 			if d > delta || (0-d) > delta {
 				t.Errorf(
 					"Node %d received %d keys, expected %.0f (+/- %.2f)",
@@ -260,6 +281,52 @@ func TestUniformDistribution(t *testing.T) {
 				)
 			}
 		}
+		if chi2 > chiTable[size-1] {
+			t.Errorf(
+				"Chi2 condition for .9 is not met (expected %.2f <= %.2f)",
+				chi2, chiTable[size-1])
+		}
+	})
+
+	t.Run("sortByStringValue", func(t *testing.T) {
+		var (
+			i      uint64
+			a, b   [size]string
+			counts = make(map[string]int, size)
+			key    = make([]byte, 16)
+		)
+
+		for i = 0; i < size; i++ {
+			a[i] = strconv.FormatUint(i, 10)
+		}
+
+		for i = 0; i < keys; i++ {
+			copy(b[:], a[:])
+			binary.BigEndian.PutUint64(key, i)
+			hash := Hash(key)
+			SortSliceByValue(b[:], hash)
+			counts[b[0]]++
+		}
+
+		var chi2 float64
+		mean := float64(keys) / float64(size)
+		delta := mean * percent
+		for node, count := range counts {
+			d := mean - float64(count)
+			chi2 += math.Pow(float64(count)-mean, 2) / mean
+			if d > delta || (0-d) > delta {
+				t.Errorf(
+					"Node %s received %d keys, expected %.0f (+/- %.2f)",
+					node, count, mean, delta,
+				)
+			}
+		}
+		if chi2 > chiTable[size-1] {
+			t.Errorf(
+				"Chi2 condition for .9 is not met (expected %.2f <= %.2f)",
+				chi2, chiTable[size-1])
+		}
+
 	})
 
 	t.Run("hash collision", func(t *testing.T) {
