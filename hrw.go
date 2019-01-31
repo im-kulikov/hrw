@@ -4,12 +4,11 @@ package hrw
 
 import (
 	"encoding/binary"
-	"errors"
+	"hash/fnv"
 	"reflect"
 	"sort"
-	"strconv"
 
-	"github.com/reusee/mmh3"
+	"github.com/spaolacci/murmur3"
 )
 
 type (
@@ -41,13 +40,7 @@ func (h hashed) Less(i, j int) bool { return h.weight[h.sorted[i]] < h.weight[h.
 func (h hashed) Swap(i, j int)      { h.sorted[i], h.sorted[j] = h.sorted[j], h.sorted[i] }
 
 func Hash(key []byte) uint64 {
-	h := mmh3.New128()
-	// error always nil
-	_, _ = h.Write(key)
-	data := h.Sum(nil)
-	return weight(
-		binary.BigEndian.Uint64(data[:8]),
-		binary.BigEndian.Uint64(data[8:]))
+	return murmur3.Sum64(key)
 }
 
 func SortByWeight(nodes []uint64, hash uint64) []uint64 {
@@ -69,10 +62,10 @@ func SortByWeight(nodes []uint64, hash uint64) []uint64 {
 	return h.sorted
 }
 
-func SortSliceByValue(slice interface{}, hash uint64) error {
+func SortSliceByValue(slice interface{}, hash uint64) {
 	t := reflect.TypeOf(slice)
 	if t.Kind() != reflect.Slice {
-		return errors.New("must be slice")
+		return
 	}
 
 	var (
@@ -83,16 +76,17 @@ func SortSliceByValue(slice interface{}, hash uint64) error {
 	)
 
 	if length == 0 {
-		return nil
+		return
 	}
 
 	switch slice := slice.(type) {
 	case []int:
+		var key = make([]byte, 16)
 		for i := 0; i < length; i++ {
-			key := strconv.Itoa(slice[i])
-			h := []byte(key)
-			// panic(Hash(h))
-			rule = append(rule, weight(hash, Hash(h)))
+			binary.BigEndian.PutUint64(key, uint64(slice[i]))
+			h := fnv.New64()
+			_, _ = h.Write(key)
+			rule = append(rule, weight(h.Sum64()-1, hash))
 		}
 	case []string:
 		for i := 0; i < length; i++ {
@@ -101,7 +95,7 @@ func SortSliceByValue(slice interface{}, hash uint64) error {
 		}
 	default:
 		if _, ok := val.Index(0).Interface().(Hasher); !ok {
-			return errors.New("unknown type")
+			return
 		}
 
 		for i := 0; i < length; i++ {
@@ -111,35 +105,42 @@ func SortSliceByValue(slice interface{}, hash uint64) error {
 	}
 
 	rule = SortByWeight(rule, hash)
-	sortByRule(swap, uint64(length), rule)
-
-	return nil
+	sortByRuleInverse(swap, uint64(length), rule)
 }
 
 func SortSliceByIndex(slice interface{}, hash uint64) {
 	length := uint64(reflect.ValueOf(slice).Len())
 	swap := reflect.Swapper(slice)
-
 	rule := make([]uint64, 0, length)
 	for i := uint64(0); i < length; i++ {
 		rule = append(rule, i)
 	}
-
 	rule = SortByWeight(rule, hash)
-	sortByRule(swap, length, rule)
+	sortByRuleInverse(swap, length, rule)
 }
 
-func sortByRule(swap swapper, length uint64, rule []uint64) {
+func sortByRuleDirect(swap swapper, length uint64, rule []uint64) {
+	done := make([]bool, length)
+	for i := uint64(0); i < length; i++ {
+		if done[i] {
+			continue
+		}
+		for j := rule[i]; !done[rule[j]]; j = rule[j] {
+			swap(int(i), int(j))
+			done[j] = true
+		}
+	}
+}
+
+func sortByRuleInverse(swap swapper, length uint64, rule []uint64) {
 	done := make([]bool, length)
 	for i := uint64(0); i < length; i++ {
 		if done[i] {
 			continue
 		}
 
-		done[i] = true
-
-		for j := rule[i]; !done[rule[j]]; j = rule[j] {
-			swap(int(i), int(j))
+		for j := i; !done[rule[j]]; j = rule[j] {
+			swap(int(j), int(rule[j]))
 			done[j] = true
 		}
 	}
