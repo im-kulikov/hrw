@@ -14,6 +14,7 @@ import (
 type (
 	swapper func(i, j int)
 
+	// Hasher interface used by SortSliceByValue
 	Hasher interface{ Hash() uint64 }
 
 	hashed struct {
@@ -39,10 +40,12 @@ func (h hashed) Len() int           { return h.length }
 func (h hashed) Less(i, j int) bool { return h.weight[h.sorted[i]] < h.weight[h.sorted[j]] }
 func (h hashed) Swap(i, j int)      { h.sorted[i], h.sorted[j] = h.sorted[j], h.sorted[i] }
 
+// Hash uses murmur3 hash to return uint64
 func Hash(key []byte) uint64 {
 	return murmur3.Sum64(key)
 }
 
+// SortByWeight receive nodes and hash, and sort it by weight
 func SortByWeight(nodes []uint64, hash uint64) []uint64 {
 	var (
 		l = len(nodes)
@@ -62,6 +65,7 @@ func SortByWeight(nodes []uint64, hash uint64) []uint64 {
 	return h.sorted
 }
 
+// SortSliceByValue received []T and hash to sort by value-weight
 func SortSliceByValue(slice interface{}, hash uint64) {
 	t := reflect.TypeOf(slice)
 	if t.Kind() != reflect.Slice {
@@ -108,6 +112,7 @@ func SortSliceByValue(slice interface{}, hash uint64) {
 	sortByRuleInverse(swap, uint64(length), rule)
 }
 
+// SortSliceByIndex received []T and hash to sort by index-weight
 func SortSliceByIndex(slice interface{}, hash uint64) {
 	length := uint64(reflect.ValueOf(slice).Len())
 	swap := reflect.Swapper(slice)
