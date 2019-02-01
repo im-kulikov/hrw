@@ -89,6 +89,12 @@ func SortSliceByValue(slice interface{}, hash uint64) {
 			binary.BigEndian.PutUint64(key, uint64(slice[i]))
 			rule = append(rule, weight(Hash(key), hash))
 		}
+	case []int32:
+		var key = make([]byte, 16)
+		for i := 0; i < length; i++ {
+			binary.BigEndian.PutUint32(key, uint32(slice[i]))
+			rule = append(rule, weight(Hash(key), hash))
+		}
 	case []string:
 		for i := 0; i < length; i++ {
 			rule = append(rule, weight(hash,
