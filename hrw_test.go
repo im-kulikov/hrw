@@ -329,6 +329,47 @@ func TestUniformDistribution(t *testing.T) {
 
 	})
 
+	t.Run("sortByInt32Value", func(t *testing.T) {
+		var (
+			i      uint64
+			a, b   [size]int32
+			counts = make(map[int32]int, size)
+			key    = make([]byte, 16)
+		)
+
+		for i = 0; i < size; i++ {
+			a[i] = int32(i)
+		}
+
+		for i = 0; i < keys; i++ {
+			copy(b[:], a[:])
+			binary.BigEndian.PutUint64(key, i)
+			hash := Hash(key)
+			SortSliceByValue(b[:], hash)
+			counts[b[0]]++
+		}
+
+		var chi2 float64
+		mean := float64(keys) / float64(size)
+		delta := mean * percent
+		for node, count := range counts {
+			d := mean - float64(count)
+			chi2 += math.Pow(float64(count)-mean, 2) / mean
+			if d > delta || (0-d) > delta {
+				t.Errorf(
+					"Node %d received %d keys, expected %.0f (+/- %.2f)",
+					node, count, mean, delta,
+				)
+			}
+		}
+		if chi2 > chiTable[size-1] {
+			t.Errorf(
+				"Chi2 condition for .9 is not met (expected %.2f <= %.2f)",
+				chi2, chiTable[size-1])
+		}
+
+	})
+
 	t.Run("hash collision", func(t *testing.T) {
 		var (
 			i      uint64
